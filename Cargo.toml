@@ -1,0 +1,50 @@
+cargo-features = ["profile-rustflags"]
+
+[package]
+name = "decoder"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+apollo = { git = "https://github.com/NexusXe/libapollo" }
+rand = { version = "0.8", features = ["small_rng"] }
+hex = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+csv = "1"
+
+[profile.release]
+codegen-units = 1
+debug = false
+strip = true
+lto = true
+opt-level = 3
+rustflags = [
+    "-C", "inline-threshold=25",
+    "-C", "code-model=small",
+    "-C", "target-cpu=native"
+]
+
+[profile.release.package."*"] # +
+incremental = true
+codegen-units = 1
+debug = false
+strip = true
+opt-level = 3
+rustflags = [
+    "-C", "inline-threshold=25",
+    "-C", "code-model=small",
+    "-C", "target-cpu=native"
+]
+
+[profile.release.build-override]
+codegen-units = 1
+debug = false
+strip = true
+opt-level = 3
+rustflags = [
+    "-C", "inline-threshold=25",
+    "-C", "code-model=small",
+    "-C", "target-cpu=native"
+]
