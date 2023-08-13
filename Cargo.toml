@@ -8,7 +8,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-apollo = { git = "https://github.com/NexusXe/libapollo" }
+#apollo = { git = "https://github.com/NexusXe/libapollo" }
+apollo = { path = "../apollo" }
 rand = { version = "0.8", features = ["small_rng"] }
 hex = "0.4"
 serde = { version = "1.0", features = ["derive"] }

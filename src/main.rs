@@ -10,7 +10,7 @@ extern crate apollo;
 extern crate hex;
 extern crate csv;
 
-use apollo::{parameters::{TOTAL_MESSAGE_LENGTH_BYTES, CALLSIGN, START_END_HEADER, BARE_MESSAGE_LENGTH_BYTES}, telemetry::{decode_packet, values_from_packet}};
+use apollo::{parameters::{TOTAL_MESSAGE_LENGTH_BYTES, CALLSIGN, START_END_HEADER, BARE_MESSAGE_LENGTH_BYTES}, telemetry::{decode_packet, values_from_packet, DecodedDataPacket}};
 use serde::{Serialize, Deserialize};
 
 mod sensors;
@@ -18,11 +18,7 @@ mod sensors;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Data {
     timestamp: u64,
-    altitude: f32,
-    voltage: f32,
-    temperature: f32,
-    latitude: f32,
-    longitude: f32,
+    packetdata: DecodedDataPacket,
     original_packet: String,
     decoded_packet: String,
 }
@@ -42,6 +38,7 @@ mod tests {
     }
     
     #[test]
+    #[no_mangle]
     fn try_corrupt_decode() {
         const CORRUPT_BYTES: usize = 18;
         let mut _packet: [u8; TOTAL_MESSAGE_LENGTH_BYTES] = get_random_packet();
@@ -59,7 +56,7 @@ mod tests {
         for i in _packet_data {
             print!("{:02x?} ", i);
         }
-
+        
         assert_eq!(_packet_data, decode_packet(_corrupt_packet))
     }
 }
@@ -120,11 +117,11 @@ fn main() {
     //     println!("{:02x?} ", i.to_be_bytes());
     // } println!();
 
-    let _altitude = packet_values[0];
-    let _voltage = packet_values[1];
-    let _temperature = packet_values[2];
-    let _latitude = packet_values[3];
-    let _longitude = packet_values[4];
+    let _altitude = packet_values.altitude;
+    let _voltage = packet_values.voltage;
+    let _temperature = packet_values.temperature;
+    let _latitude = packet_values.latitude;
+    let _longitude = packet_values.longitude;
 
     println!("ALTITUDE    :  {:.4} METERS ASL", _altitude);
     println!("VOLTAGE     :  {:.4} VOLTS", 12.0f32+_voltage);
@@ -136,11 +133,13 @@ fn main() {
 
     let mut packet_data = crate::Data {
         timestamp: std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs(),
-        altitude: _altitude,
-        voltage: _voltage,
-        temperature: _temperature,
-        latitude: _latitude,
-        longitude: _longitude,
+        packetdata: DecodedDataPacket {
+            altitude: _altitude,
+            voltage: _voltage,
+            temperature: _temperature,
+            latitude: _latitude,
+            longitude: _longitude
+        },
         original_packet: format!("{:02x?}", _packet),
         decoded_packet: format!("{:02x?}", decoded_packet),
     };
@@ -175,19 +174,21 @@ fn main() {
                 _packet = get_random_packet();
                 let decoded_packet = try_decode_packet(_packet);
                 let packet_values = values_from_packet(decoded_packet);
-                let _altitude = packet_values[0];
-                let _voltage = packet_values[1];
-                let _temperature = packet_values[2];
-                let _latitude = packet_values[3];
-                let _longitude = packet_values[4];
+                let _altitude = packet_values.altitude;
+                let _voltage = packet_values.voltage;
+                let _temperature = packet_values.temperature;
+                let _latitude = packet_values.latitude;
+                let _longitude = packet_values.longitude;
 
                 packet_data = crate::Data {
                     timestamp: std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs(),
-                    altitude: _altitude,
-                    voltage: _voltage,
-                    temperature: _temperature,
-                    latitude: _latitude,
-                    longitude: _longitude,
+                    packetdata: DecodedDataPacket {
+                        altitude: _altitude,
+                        voltage: _voltage,
+                        temperature: _temperature,
+                        latitude: _latitude,
+                        longitude: _longitude
+                    },
                     original_packet: format!("{:02x?}", _packet),
                     decoded_packet: format!("{:02x?}", decoded_packet),
                 };
