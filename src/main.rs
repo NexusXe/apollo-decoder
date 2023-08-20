@@ -1,10 +1,9 @@
 #![feature(core_intrinsics)]
-#![feature(nonzero_ops)]
 
 use std::env;
 use std::io::prelude::*;
 use std::path::Path;
-use core::intrinsics::{likely, unlikely, unchecked_rem, unchecked_add};
+use core::intrinsics::{likely, unlikely};
 
 extern crate apollo;
 extern crate hex;
@@ -28,7 +27,7 @@ mod tests {
     extern crate apollo;
     extern crate hex;
     
-    use apollo::{parameters::{TOTAL_MESSAGE_LENGTH_BYTES, BARE_MESSAGE_LENGTH_BYTES}, telemetry::decode_packet};
+    use apollo::parameters::{TOTAL_MESSAGE_LENGTH_BYTES, BARE_MESSAGE_LENGTH_BYTES};
 
     use crate::sensors;
 
@@ -40,7 +39,15 @@ mod tests {
     #[test]
     #[no_mangle]
     fn try_corrupt_decode() {
-        const CORRUPT_BYTES: usize = 18;
+        // debug the similarity bitmask:
+        // let (mask, _) = find_packet_similarities();
+        // println!("");
+        // for i in mask {
+        //     print!("{:08b} ", i);
+        // }
+
+        println!("");
+        const CORRUPT_BYTES: usize = 8;
         let mut _packet: [u8; TOTAL_MESSAGE_LENGTH_BYTES] = get_random_packet();
         let mut _corrupt_packet = _packet.clone();
         for i in 0..CORRUPT_BYTES {
@@ -57,12 +64,12 @@ mod tests {
             print!("{:02x?} ", i);
         }
         
-        assert_eq!(_packet_data, decode_packet(_corrupt_packet))
+        assert_eq!(_packet_data, crate::try_decode_packet(_corrupt_packet))
     }
 }
 
 #[inline]
-fn try_decode_packet(_packet: [u8; TOTAL_MESSAGE_LENGTH_BYTES]) -> [u8; BARE_MESSAGE_LENGTH_BYTES] {
+pub fn try_decode_packet(_packet: [u8; TOTAL_MESSAGE_LENGTH_BYTES]) -> [u8; BARE_MESSAGE_LENGTH_BYTES] {
      // for i in 0..14 {
     //     _packet[i] = 0x00;
     // }
@@ -70,7 +77,7 @@ fn try_decode_packet(_packet: [u8; TOTAL_MESSAGE_LENGTH_BYTES]) -> [u8; BARE_MES
     //     print!("{:02x?} ", i);
     // } println!();
 
-    let decoded_packet = decode_packet(_packet);
+    let decoded_packet = decode_packet(_packet, &[0u8]);
     
     // println!();
     // for i in decoded_packet {
@@ -91,6 +98,34 @@ pub fn get_random_packet() -> [u8; TOTAL_MESSAGE_LENGTH_BYTES] {
     apollo::generate_packet(sensors::get_location, sensors::get_altitude, sensors::get_voltage, sensors::get_temperature)
 }
 
+fn _generate_decode_loop() {
+    loop {
+        let _packet = get_random_packet();
+        let decoded_packet = try_decode_packet(_packet);
+        let packet_values = values_from_packet(decoded_packet);
+        let _altitude = packet_values.altitude;
+        let _voltage = packet_values.voltage;
+        let _temperature = packet_values.temperature;
+        let _latitude = packet_values.latitude;
+        let _longitude = packet_values.longitude;
+    
+        let packet_data = crate::Data {
+            timestamp: std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs(),
+            packetdata: DecodedDataPacket {
+                altitude: _altitude,
+                voltage: _voltage,
+                temperature: _temperature,
+                latitude: _latitude,
+                longitude: _longitude
+            },
+            original_packet: format!("{:02x?}", _packet),
+            decoded_packet: format!("{:02x?}", decoded_packet),
+        };
+        debug_assert_eq!(packet_data.decoded_packet[0..decoded_packet.len()], packet_data.original_packet[0..decoded_packet.len()]);
+    
+        println!("{:#?}", &packet_data);
+    }
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -131,7 +166,7 @@ fn main() {
     println!("CURRENT LOCATION:");
     println!("https://www.google.com/maps/@{:.},{:.},19z?entry=ttu", _latitude, _longitude);
 
-    let mut packet_data = crate::Data {
+    let packet_data = crate::Data {
         timestamp: std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs(),
         packetdata: DecodedDataPacket {
             altitude: _altitude,
@@ -165,39 +200,5 @@ fn main() {
 
     wtr.serialize(&packet_data).unwrap();
 
-    let mut i = 0u128;
-    loop {
-        
-        unsafe {
-            i = core::intrinsics::unchecked_add(i, 1);
-            while unchecked_rem(i, 100_000u128) != 0 {
-                _packet = get_random_packet();
-                let decoded_packet = try_decode_packet(_packet);
-                let packet_values = values_from_packet(decoded_packet);
-                let _altitude = packet_values.altitude;
-                let _voltage = packet_values.voltage;
-                let _temperature = packet_values.temperature;
-                let _latitude = packet_values.latitude;
-                let _longitude = packet_values.longitude;
-
-                packet_data = crate::Data {
-                    timestamp: std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs(),
-                    packetdata: DecodedDataPacket {
-                        altitude: _altitude,
-                        voltage: _voltage,
-                        temperature: _temperature,
-                        latitude: _latitude,
-                        longitude: _longitude
-                    },
-                    original_packet: format!("{:02x?}", _packet),
-                    decoded_packet: format!("{:02x?}", decoded_packet),
-                };
-
-                i = unchecked_add(i, 1);
-            }
-            println!("{:}", i);
-            println!("{:#?}", &packet_data);
-        }
-    }
 
 }
