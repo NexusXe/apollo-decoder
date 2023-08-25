@@ -3,11 +3,12 @@
 use std::env;
 use std::io::prelude::*;
 use std::path::Path;
-use core::intrinsics::{likely, unlikely};
+use core::intrinsics::*;
 
 extern crate apollo;
 extern crate hex;
 extern crate csv;
+
 
 use apollo::{parameters::{TOTAL_MESSAGE_LENGTH_BYTES, CALLSIGN, START_END_HEADER, BARE_MESSAGE_LENGTH_BYTES}, telemetry::{decode_packet, values_from_packet, DecodedDataPacket}};
 use serde::{Serialize, Deserialize};
@@ -33,7 +34,7 @@ mod tests {
 
     pub fn get_random_packet() -> [u8; TOTAL_MESSAGE_LENGTH_BYTES] {
         unsafe { crate::sensors::init() };
-        apollo::generate_packet(sensors::get_location, sensors::get_altitude, sensors::get_voltage, sensors::get_temperature)
+        apollo::generate_packet(sensors::get_temperature(), sensors::get_altitude(), sensors::get_voltage(), sensors::get_location())
     }
     
     #[test]
@@ -47,7 +48,7 @@ mod tests {
         // }
 
         println!("");
-        const CORRUPT_BYTES: usize = 8;
+        const CORRUPT_BYTES: usize = 18;
         let mut _packet: [u8; TOTAL_MESSAGE_LENGTH_BYTES] = get_random_packet();
         let mut _corrupt_packet = _packet.clone();
         for i in 0..CORRUPT_BYTES {
@@ -95,19 +96,20 @@ pub fn try_decode_packet(_packet: [u8; TOTAL_MESSAGE_LENGTH_BYTES]) -> [u8; BARE
 #[inline]
 pub fn get_random_packet() -> [u8; TOTAL_MESSAGE_LENGTH_BYTES] {
     unsafe { crate::sensors::init() };
-    apollo::generate_packet(sensors::get_location, sensors::get_altitude, sensors::get_voltage, sensors::get_temperature)
+    apollo::generate_packet(sensors::get_temperature(), sensors::get_altitude(), sensors::get_voltage(), sensors::get_location())
 }
 
-fn _generate_decode_loop() {
+pub unsafe fn _generate_decode_loop() {
+    let mut i: u128 = 0;
     loop {
         let _packet = get_random_packet();
         let decoded_packet = try_decode_packet(_packet);
         let packet_values = values_from_packet(decoded_packet);
-        let _altitude = packet_values.altitude;
-        let _voltage = packet_values.voltage;
-        let _temperature = packet_values.temperature;
-        let _latitude = packet_values.latitude;
-        let _longitude = packet_values.longitude;
+        let _altitude = packet_values.data_arr[0];
+        let _voltage = packet_values.data_arr[1];
+        let _temperature = packet_values.data_arr[2];
+        let _latitude = packet_values.data_arr[3];
+        let _longitude = packet_values.data_arr[4];
     
         let packet_data = crate::Data {
             timestamp: std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs(),
@@ -123,22 +125,25 @@ fn _generate_decode_loop() {
         };
         debug_assert_eq!(packet_data.decoded_packet[0..decoded_packet.len()], packet_data.original_packet[0..decoded_packet.len()]);
     
-        println!("{:#?}", &packet_data);
+        i = unchecked_add(i, 1);
+        
+        if unlikely(i % 100_000 == 0) {
+            println!("{}", i);
+            println!("{:#?}", packet_data);
+        }
     }
 }
 
-fn main() {
+#[inline]
+fn cli_main() {
     let args: Vec<String> = env::args().collect();
-    // dbg!(&args);
-    
+    if &args.len() == &1usize {
+        eprintln!("No input data provided.");
+        return
+    }
+    debug_assert_ne!(&args.len(), &1usize, "\nNo input data");
     let hex_input = hex::decode(&args[1]).unwrap();
     assert_eq!(hex_input.len(), TOTAL_MESSAGE_LENGTH_BYTES, "\nIncorrect length input array. Expected {}, found {}.", TOTAL_MESSAGE_LENGTH_BYTES, hex_input.len());
-    
-    // println!("Packet: ");
-    // for i in &hex_input {
-    //     print!("{:02x?} ", i);
-    // } println!("");
-    
     let mut _packet: [u8; TOTAL_MESSAGE_LENGTH_BYTES] = [0u8; TOTAL_MESSAGE_LENGTH_BYTES];
     
     
@@ -152,11 +157,11 @@ fn main() {
     //     println!("{:02x?} ", i.to_be_bytes());
     // } println!();
 
-    let _altitude = packet_values.altitude;
-    let _voltage = packet_values.voltage;
-    let _temperature = packet_values.temperature;
-    let _latitude = packet_values.latitude;
-    let _longitude = packet_values.longitude;
+    let _altitude = packet_values.data_arr[0];
+    let _voltage = packet_values.data_arr[1];
+    let _temperature = packet_values.data_arr[2];
+    let _latitude = packet_values.data_arr[3];
+    let _longitude = packet_values.data_arr[4];
 
     println!("ALTITUDE    :  {:.4} METERS ASL", _altitude);
     println!("VOLTAGE     :  {:.4} VOLTS", 12.0f32+_voltage);
@@ -201,4 +206,10 @@ fn main() {
     wtr.serialize(&packet_data).unwrap();
 
 
+}
+
+
+fn main() {
+    cli_main();
+    unsafe { _generate_decode_loop() };
 }
